@@ -29,6 +29,7 @@ void setup() {
                     // settings. This is normally not needed.
                     ->set_wifi("PangoPi", "mikeharris")
                     ->set_sk_server("192.168.5.1", 3000)
+                    ->enable_ota("pangolin")
                     ->get_app();
 
   // The "Signal K path" identifies the output of the sensor to the Signal K
@@ -138,13 +139,19 @@ void setup() {
       ->connect_to(new SKOutputFloat("propulsion.main.coolantTemperature",
                                      "/coolantTemperature/skPath"));
 
-  // Measure exhaust temperature
-  auto* exhaust_temp =
-      new OneWireTemperature(dts, dts_read_delay, "/exhaustTemperature/oneWire");
+  // Measure engine room temperature
+  auto* room_temp =
+      new OneWireTemperature(dts, dts_read_delay, "/engineRoomTemperature/oneWire");
 
-  exhaust_temp->connect_to(new Linear(1.0, 0.0, "/exhaustTemperature/linear"))
-      ->connect_to(new SKOutputFloat("propulsion.main.exhaustTemperature",
-                                     "/exhaustTemperature/skPath"));
+//   SKMetadata* metadata = new SKMetadata();
+//   metadata->description_ = "Engine Room Temperature";
+//   metadata->display_name_ = "Engine Room Temperature";
+//   metadata->short_name_ = "Engine Room Temp";
+//   metadata->units_ = "K";
+
+  room_temp->connect_to(new Linear(1.0, 0.0, "/engineRoomTemperature/linear"))
+      ->connect_to(new SKOutputFloat("environment.inside.engineRoom.temperature",
+                                     "/engineRoomTemperature/skPath"));
 
 
   // Start the SensESP application running. Because of everything that's been
