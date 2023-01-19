@@ -3,11 +3,13 @@
 //#define SERIAL_DEBUG_DISABLED
 
 #include "sensesp/sensors/digital_input.h"
+#include "sensesp/sensors/digital_output.h"
 #include "sensesp/signalk/signalk_output.h"
 #include "sensesp/transforms/frequency.h"
 #include "sensesp/transforms/linear.h"
 #include "sensesp_app_builder.h"
 #include "sensesp_onewire/onewire_temperature.h"
+#include "sensesp/transforms/threshold.h"
 
 using namespace sensesp;
 
@@ -23,24 +25,22 @@ void setup() {
   // Construct the global SensESPApp() object
   SensESPAppBuilder builder;
   sensesp_app = (&builder)
-                    // Set a custom hostname for the app.
                     ->set_hostname("engine_monitor")
-                    // Optionally, hard-code the WiFi and Signal K server
-                    // settings. This is normally not needed.
                     ->set_wifi("PangoPi", "mikeharris")
                     ->set_sk_server("192.168.5.1", 3000)
                     ->enable_ota("pangolin")
                     ->get_app();
+  
+  // Define the pin connection
+  uint8_t alarm_pin = 6;  // The alarm pin
+  uint8_t rpm_pin = 5;    // For the RPM counter
+  uint8_t dts_pin = 4;    // The Dallas Temperature Sensors
 
   // connect a RPM meter. A DigitalInputCounter implements an interrupt
   // to count pulses and reports the readings every read_delay ms. A Frequency
   // transform takes a number of pulses and converts that into a frequency. 
   const float rpm_multiplier = 1.0 / 1.0;
   const unsigned int rpm_read_delay = 503;  // prime number
-
-  // Wire it all up by connecting the producer directly to the consumer
-  // ESP32 pins are specified as just the X in GPIOX
-  uint8_t rpm_pin = 5;
 
   auto* rpm_sensor =
     new DigitalInputCounter(rpm_pin, INPUT_PULLUP, RISING, rpm_read_delay);
@@ -54,7 +54,6 @@ void setup() {
 
   // OneWire Temperature Sensors
   //////////////////////////////
-  uint8_t dts_pin = 4;
 
   DallasTemperatureSensors* dts = new DallasTemperatureSensors(dts_pin);
 
@@ -95,6 +94,25 @@ void setup() {
                                    "/engineRoomTemperature/skPath", 
                                    room_temp_metadata));
 
+  // Alarm listeners
+  const char* config_path = "/threshold/lights";
+
+  // Wire up the output of the heat exchanger, and then output
+  // the transformed float to boolean to DigitalOutput
+  // Threshold = 273.15 + 95 Kelvin => 95 degrees Celcius
+  heat_exchanger_temp
+      ->connect_to(new FloatThreshold(0.0f, 273.15f + 95.0f, false,
+                                      "/threshold/heatExchangerTemp"))
+      ->connect_to(new DigitalOutput(alarm_pin));
+
+  // Connect the output of the rpm sensor to a threshold transform and connect
+  // to a digital output.
+  // 3300 rpm / 60 = 55 Hz
+  rpm_sensor
+      ->connect_to(
+          new FloatThreshold(0.0f, 3300.0f / 60, false, "/threshold/revolutions"))
+      ->connect_to(new DigitalOutput(alarm_pin));
+  
   // Start the SensESP application running. Because of everything that's been
   // set up above, it constantly monitors the interrupt pin, and every
   // read_delay ms, it sends the calculated frequency to Signal K.
