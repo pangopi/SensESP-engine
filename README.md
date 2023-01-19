@@ -1,9 +1,21 @@
-# SensESP Project Template
+# SensESP Engine Monitor
 
-This repository provides a template for [SensESP](https://github.com/SignalK/SensESP/) projects.
-Fork, clone or download the repository and try building and uploading the project to an ESP32 device.
-You should immediately see output on the serial monitor!
+Engine monitor for S/V Pangolin II. This project will monitor sensors on the main engine and send the data to SignalK.
 
-To customize the template for your own purposes, edit the `src/main.cpp` and `platformio.ini` files.
+Currently implemented sensors are:
+- RPM sensor using an infrared slot sensor mounted to the main pulley
+- Temperature monitor for the engine room
+- Temperature monitor mounted to the heat exchanger
 
-Comprehensive documentation for SensESP, including how to get started with your own project, is available at the [SensESP documentation site](https://signalk.org/SensESP/).
+Planned sensors to be added:
+- Oil pressure sensor
+- Oil pressure switch
+- Alternator output switch
+- Coolant temperature sensor
+
+Planned features:
+- Sound alarm when value out of bounds
+- Record engine run time
+
+Built using [SensESP](https://github.com/SignalK/SensESP/).
+
