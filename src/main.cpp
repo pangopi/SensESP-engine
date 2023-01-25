@@ -1,8 +1,10 @@
 #include <Arduino.h>
 
-//#define SERIAL_DEBUG_DISABLED
-
 #include "sensesp/sensors/digital_input.h"
+#include "sensesp/sensors/analog_input.h"
+#include "sensesp/transforms/analogvoltage.h"
+#include "sensesp/transforms/curveinterpolator.h"
+#include "sensesp/transforms/voltagedivider.h"
 #include "sensesp/sensors/digital_output.h"
 #include "sensesp/signalk/signalk_output.h"
 #include "sensesp/transforms/frequency.h"
@@ -12,6 +14,8 @@
 #include "sensesp/transforms/threshold.h"
 
 using namespace sensesp;
+
+//#define SERIAL_DEBUG_DISABLED
 
 // SensESP builds upon the ReactESP framework. Every ReactESP application
 // defines an "app" object.
@@ -32,9 +36,13 @@ void setup() {
                     ->get_app();
   
   // Define the pin connection
-  uint8_t alarm_pin = 6;  // The alarm pin
-  uint8_t rpm_pin = 5;    // For the RPM counter
-  uint8_t dts_pin = 4;    // The Dallas Temperature Sensors
+  const uint8_t alarm_pin = 6;  // The alarm pin
+  const uint8_t rpm_pin = 5;    // For the RPM counter
+  const uint8_t dts_pin = 4;    // The Dallas Temperature Sensors
+  const uint8_t lpg_pin = 18;   // Digital in for LPG alarm
+  const uint8_t coolant_pin = 36; // Analog in for coolant sender
+  const uint8_t oil_pressure_pin = 39; // Analog in for the oil pressure sender
+  const uint8_t oil_switch = 19; // Digital in for the oil pressure switch
 
   // connect a RPM meter. A DigitalInputCounter implements an interrupt
   // to count pulses and reports the readings every read_delay ms. A Frequency
@@ -54,13 +62,13 @@ void setup() {
 
   // OneWire Temperature Sensors
   //////////////////////////////
-
   DallasTemperatureSensors* dts = new DallasTemperatureSensors(dts_pin);
 
   // Define how often SensESP should read the sensor(s) in milliseconds
   uint dts_read_delay = 2003; // prime number close to 2 seconds.
 
   // Measure heat exchanger temperature
+  /////////////////////////////////////
   auto* heat_exchanger_temp =
     new OneWireTemperature(dts, dts_read_delay, "/heatExchangerTemperature/oneWire");
 
@@ -78,6 +86,7 @@ void setup() {
                                    heat_exchanger_metadata));
 
   // Measure engine room temperature
+  //////////////////////////////////
   auto* room_temp =
     new OneWireTemperature(dts, dts_read_delay, "/engineRoomTemperature/oneWire");
 
@@ -94,9 +103,71 @@ void setup() {
                                    "/engineRoomTemperature/skPath", 
                                    room_temp_metadata));
 
-  // Alarm listeners
-  const char* config_path = "/threshold/lights";
+class TemperatureInterpreter : public CurveInterpolator {
+ public:
+  TemperatureInterpreter(String config_path = "")
+      : CurveInterpolator(NULL, config_path) {
+    // Populate a lookup table tp translate the ohm values returned by
+    // our temperature sender to degrees Kelvin
+    clear_samples();
+    // addSample(CurveInterpolator::Sample(knownOhmValue, knownKelvin));
+    add_sample(CurveInterpolator::Sample(0, 418.9));
+    add_sample(CurveInterpolator::Sample(5, 414.71));
+    add_sample(CurveInterpolator::Sample(36, 388.71));
+    add_sample(CurveInterpolator::Sample(56, 371.93));
+    add_sample(CurveInterpolator::Sample(59, 366.48));
+    add_sample(CurveInterpolator::Sample(81, 355.37));
+    add_sample(CurveInterpolator::Sample(112, 344.26));
+    add_sample(CurveInterpolator::Sample(240, 322.04));
+    add_sample(CurveInterpolator::Sample(550, 255.37));
+    add_sample(CurveInterpolator::Sample(10000, 237.6));
+  }
+};
 
+  // Coolant temperature sender
+  /////////////////////////////
+  // Sensor---R1--|--R2---GND
+  //              |-ADC
+  const float coolant_Vin = 3.3; // Volatge deiveder nominal voltage
+  const float coolant_R2 = 46.0; // Voltage divider R2 for coolant temp sender
+  auto* coolant_temp = new AnalogInput(coolant_pin, 500, "/propulsion/coolant/ADC", 3.3F);
+  coolant_temp->connect_to(new AnalogVoltage())
+      ->connect_to(new VoltageDividerR2(coolant_R2, coolant_Vin,
+                                        "/propulsion/coolant/sender"))
+      ->connect_to(new TemperatureInterpreter("/propulsion/coolant/curve"))
+      ->connect_to(new Linear(1.0, 0.0, "/propulsion/coolant/calibrate"))
+      ->connect_to(new SKOutputFloat(
+          "propulsion.main.coolant.temperature", "/propulsion/coolant/temp",
+          new SKMetadata("K", "Coolant Temperature",
+                         "Engine coolant temperature", "Coolant Temp", 2000)));
+  
+  // Oil pressure sender
+  //////////////////////
+  // const float oilPressure_Vin = 3.3;
+  // const float oilPressure_R2 = 46.0; 
+  // auto* oilPresssure = new AnalogInput(oil_pressure_pin, 500, "/propulsion/oilPressure/sender");
+  // oilPresssure
+  //     ->connect_to(new Linear(1.2, 3.3, "/propulsion/oilPressure/linear"))
+  //     ->connect_to(new SKOutputNumeric("propulsion.main.oilPressure"));
+
+  // Engine oil pressure switch (on when the pressure is too low)
+  ///////////////////////////////////////////////////////////////
+  auto* oil_pressure_switch = new DigitalInputState(oil_pressure_pin, INPUT, 500, "");
+  oil_pressure_switch->connect_to(new SKOutputBool(
+      "notifications.oilPressureAlarm",
+      new SKMetadata("boolean", "Oil Pressure Alarm",
+                     "Oil pressure switch registering low oil pressure",
+                     "Oil Switch", 1000)));
+
+  // LPG gas sensor alarm input
+  auto* lpg_in = new DigitalInputState(lpg_pin, INPUT, 500, "");
+  lpg_in->connect_to(new SKOutputBool(
+      "notifications.LPGAlarm",
+      new SKMetadata("boolean", "LPG Gas Alarm", "State of the LPG gas sensor",
+                     "Gas Alarm", 5000)));
+
+  // ALARMS
+  /////////
   // Wire up the output of the heat exchanger, and then output
   // the transformed float to boolean to DigitalOutput
   // Threshold = 273.15 + 95 Kelvin => 95 degrees Celcius
