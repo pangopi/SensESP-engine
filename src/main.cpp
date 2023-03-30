@@ -103,43 +103,43 @@ void setup() {
                                    "/engineRoomTemperature/skPath", 
                                    room_temp_metadata));
 
-class TemperatureInterpreter : public CurveInterpolator {
- public:
-  TemperatureInterpreter(String config_path = "")
-      : CurveInterpolator(NULL, config_path) {
-    // Populate a lookup table tp translate the ohm values returned by
-    // our temperature sender to degrees Kelvin
-    clear_samples();
-    // addSample(CurveInterpolator::Sample(knownOhmValue, knownKelvin));
-    add_sample(CurveInterpolator::Sample(0, 418.9));
-    add_sample(CurveInterpolator::Sample(5, 414.71));
-    add_sample(CurveInterpolator::Sample(36, 388.71));
-    add_sample(CurveInterpolator::Sample(56, 371.93));
-    add_sample(CurveInterpolator::Sample(59, 366.48));
-    add_sample(CurveInterpolator::Sample(81, 355.37));
-    add_sample(CurveInterpolator::Sample(112, 344.26));
-    add_sample(CurveInterpolator::Sample(240, 322.04));
-    add_sample(CurveInterpolator::Sample(550, 255.37));
-    add_sample(CurveInterpolator::Sample(10000, 237.6));
-  }
-};
+// class TemperatureInterpreter : public CurveInterpolator {
+//  public:
+//   TemperatureInterpreter(String config_path = "")
+//       : CurveInterpolator(NULL, config_path) {
+//     // Populate a lookup table tp translate the ohm values returned by
+//     // our temperature sender to degrees Kelvin
+//     clear_samples();
+//     // addSample(CurveInterpolator::Sample(knownOhmValue, knownKelvin));
+//     add_sample(CurveInterpolator::Sample(0, 418.9));
+//     add_sample(CurveInterpolator::Sample(5, 414.71));
+//     add_sample(CurveInterpolator::Sample(36, 388.71));
+//     add_sample(CurveInterpolator::Sample(56, 371.93));
+//     add_sample(CurveInterpolator::Sample(59, 366.48));
+//     add_sample(CurveInterpolator::Sample(81, 355.37));
+//     add_sample(CurveInterpolator::Sample(112, 344.26));
+//     add_sample(CurveInterpolator::Sample(240, 322.04));
+//     add_sample(CurveInterpolator::Sample(550, 255.37));
+//     add_sample(CurveInterpolator::Sample(10000, 237.6));
+//   }
+// };
 
-  // Coolant temperature sender
-  /////////////////////////////
-  // Sensor---R1--|--R2---GND
-  //              |-ADC
-  const float coolant_Vin = 3.3; // Volatge deiveder nominal voltage
-  const float coolant_R2 = 46.0; // Voltage divider R2 for coolant temp sender
-  auto* coolant_temp = new AnalogInput(coolant_pin, 500, "/propulsion/coolant/ADC", 3.3F);
-  coolant_temp->connect_to(new AnalogVoltage())
-      ->connect_to(new VoltageDividerR2(coolant_R2, coolant_Vin,
-                                        "/propulsion/coolant/sender"))
-      ->connect_to(new TemperatureInterpreter("/propulsion/coolant/curve"))
-      ->connect_to(new Linear(1.0, 0.0, "/propulsion/coolant/calibrate"))
-      ->connect_to(new SKOutputFloat(
-          "propulsion.main.coolant.temperature", "/propulsion/coolant/temp",
-          new SKMetadata("K", "Coolant Temperature",
-                         "Engine coolant temperature", "Coolant Temp", 2000)));
+//   // Coolant temperature sender
+//   /////////////////////////////
+//   // Sensor---R1--|--R2---GND
+//   //              |-ADC
+//   const float coolant_Vin = 3.3; // Volatge deiveder nominal voltage
+//   const float coolant_R2 = 46.0; // Voltage divider R2 for coolant temp sender
+//   auto* coolant_temp = new AnalogInput(coolant_pin, 500, "/propulsion/coolant/ADC", 3.3F);
+//   coolant_temp->connect_to(new AnalogVoltage())
+//       ->connect_to(new VoltageDividerR2(coolant_R2, coolant_Vin,
+//                                         "/propulsion/coolant/sender"))
+//       ->connect_to(new TemperatureInterpreter("/propulsion/coolant/curve"))
+//       ->connect_to(new Linear(1.0, 0.0, "/propulsion/coolant/calibrate"))
+//       ->connect_to(new SKOutputFloat(
+//           "propulsion.main.coolant.temperature", "/propulsion/coolant/temp",
+//           new SKMetadata("K", "Coolant Temperature",
+//                          "Engine coolant temperature", "Coolant Temp", 2000)));
   
   // Oil pressure sender
   //////////////////////
@@ -152,37 +152,37 @@ class TemperatureInterpreter : public CurveInterpolator {
 
   // Engine oil pressure switch (on when the pressure is too low)
   ///////////////////////////////////////////////////////////////
-  auto* oil_pressure_switch = new DigitalInputState(oil_pressure_pin, INPUT, 500, "");
-  oil_pressure_switch->connect_to(new SKOutputBool(
-      "notifications.oilPressureAlarm",
-      new SKMetadata("boolean", "Oil Pressure Alarm",
-                     "Oil pressure switch registering low oil pressure",
-                     "Oil Switch", 1000)));
+  // auto* oil_pressure_switch = new DigitalInputState(oil_pressure_pin, INPUT, 500, "");
+  // oil_pressure_switch->connect_to(new SKOutputBool(
+  //     "notifications.oilPressureAlarm",
+  //     new SKMetadata("boolean", "Oil Pressure Alarm",
+  //                    "Oil pressure switch registering low oil pressure",
+  //                    "Oil Switch", 1000)));
 
-  // LPG gas sensor alarm input
-  auto* lpg_in = new DigitalInputState(lpg_pin, INPUT, 500, "");
-  lpg_in->connect_to(new SKOutputBool(
-      "notifications.LPGAlarm",
-      new SKMetadata("boolean", "LPG Gas Alarm", "State of the LPG gas sensor",
-                     "Gas Alarm", 5000)));
+  // // LPG gas sensor alarm input
+  // auto* lpg_in = new DigitalInputState(lpg_pin, INPUT, 500, "");
+  // lpg_in->connect_to(new SKOutputBool(
+  //     "notifications.LPGAlarm",
+  //     new SKMetadata("boolean", "LPG Gas Alarm", "State of the LPG gas sensor",
+  //                    "Gas Alarm", 5000)));
 
   // ALARMS
   /////////
   // Wire up the output of the heat exchanger, and then output
   // the transformed float to boolean to DigitalOutput
   // Threshold = 273.15 + 95 Kelvin => 95 degrees Celcius
-  heat_exchanger_temp
-      ->connect_to(new FloatThreshold(0.0f, 273.15f + 95.0f, false,
-                                      "/threshold/heatExchangerTemp"))
-      ->connect_to(new DigitalOutput(alarm_pin));
+  // heat_exchanger_temp
+  //     ->connect_to(new FloatThreshold(0.0f, 273.15f + 95.0f, false,
+  //                                     "/threshold/heatExchangerTemp"))
+  //     ->connect_to(new DigitalOutput(alarm_pin));
 
   // Connect the output of the rpm sensor to a threshold transform and connect
   // to a digital output.
   // 3300 rpm / 60 = 55 Hz
-  rpm_sensor
-      ->connect_to(
-          new FloatThreshold(0.0f, 3300.0f / 60, false, "/threshold/revolutions"))
-      ->connect_to(new DigitalOutput(alarm_pin));
+  // rpm_sensor
+  //     ->connect_to(
+  //         new FloatThreshold(0.0f, 3300.0f / 60, false, "/threshold/revolutions"))
+  //     ->connect_to(new DigitalOutput(alarm_pin));
   
   // Start the SensESP application running. Because of everything that's been
   // set up above, it constantly monitors the interrupt pin, and every
