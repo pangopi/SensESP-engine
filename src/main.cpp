@@ -7,6 +7,7 @@
 #include "sensesp/transforms/voltagedivider.h"
 #include "sensesp/sensors/digital_output.h"
 #include "sensesp/signalk/signalk_output.h"
+#include "sensesp/transforms/time_counter.h"
 #include "sensesp/transforms/frequency.h"
 #include "sensesp/transforms/linear.h"
 #include "sensesp_app_builder.h"
@@ -36,22 +37,25 @@ void setup() {
                     ->get_app();
   
   // Define the pin connection
-  const uint8_t alarm_pin = 6;  // The alarm pin
+  const uint8_t alarm_pin = 7;  // The alarm pin
   const uint8_t rpm_pin = 5;    // For the RPM counter
-  const uint8_t dts_pin = 4;    // The Dallas Temperature Sensors
+  const uint8_t dts_pin = 3;    // The Dallas Temperature Sensors
   const uint8_t lpg_pin = 18;   // Digital in for LPG alarm
-  const uint8_t coolant_pin = 36; // Analog in for coolant sender
-  const uint8_t oil_pressure_pin = 39; // Analog in for the oil pressure sender
-  const uint8_t oil_switch = 19; // Digital in for the oil pressure switch
+  const uint8_t coolant_pin = 11; // Analog in for coolant sender
+  const uint8_t oil_pressure_pin = 12; // Analog in for the oil pressure sender
+  const uint8_t oil_switch = 16; // Digital in for the oil pressure switch
 
   // connect a RPM meter. A DigitalInputCounter implements an interrupt
   // to count pulses and reports the readings every read_delay ms. A Frequency
   // transform takes a number of pulses and converts that into a frequency. 
-  const float rpm_multiplier = 1.0 / 1.0;
+  const float rpm_multiplier = 1.0; //1.0 / 1.0;
   const unsigned int rpm_read_delay = 503;  // prime number
+  const unsigned int rpm_debounce_ignore_interval = 15;
+
 
   auto* rpm_sensor =
-    new DigitalInputCounter(rpm_pin, INPUT_PULLUP, RISING, rpm_read_delay);
+    //new DigitalInputCounter(rpm_pin, INPUT_PULLDOWN, RISING, rpm_read_delay);
+    new DigitalInputDebounceCounter(rpm_pin, INPUT_PULLDOWN, RISING, rpm_read_delay, rpm_debounce_ignore_interval);
 
   rpm_sensor
     ->connect_to(new Frequency(rpm_multiplier, 
